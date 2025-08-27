@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>iOS ↔︎ JS Bridge</title>
+</head>
+<body>
+  <button onclick="simulate()">Simular llamada iOS</button>
+
+  <script>
+    (function () {
+      function maskPan(p) { return String(p).replace(/\d(?=\d{4})/g, "•"); }
+
+      window.iOSExecutePaymentVerification = function (pan, year, month, day, extra) {
+        const resultObj = {
+          status: "ok",
+          echo: {
+            panMasked: maskPan(pan),
+            last4: String(pan).slice(-4),
+            year: String(year),
+            month: String(month),
+            day: String(day),
+            extra: String(extra)
+          },
+          timestamp: new Date().toISOString()
+        };
+        const resultString = JSON.stringify(resultObj);
+
+        setTimeout(function () {
+          try {
+            if (window.webkit && window.webkit.messageHandlers
+                && window.webkit.messageHandlers.secure3DCallbackHandler
+                && typeof window.webkit.messageHandlers.secure3DCallbackHandler.postMessage === "function") {
+              window.webkit.messageHandlers.secure3DCallbackHandler.postMessage(resultString);
+            } else if (typeof window.secure3DCallbackHandler === "function") {
+              window.secure3DCallbackHandler(resultString);
+            } else {
+              alert("Respuesta: " + resultString);
+            }
+          } catch (e) {
+            alert("Error enviando respuesta: " + e);
+          }
+        }, 2000);
+
+        return true;
+      };
+
+      // Botón de prueba manual
+      window.simulate = function () {
+        window.iOSExecutePaymentVerification(
+          "4761530001111118", "2029", "12", "10", "cualquiercosa"
+        );
+      };
+
+      // Para navegadores sin handler nativo: define un handler que muestre un alert
+      if (typeof window.secure3DCallbackHandler !== "function") {
+        window.secure3DCallbackHandler = function (msg) {
+          alert("Respuesta recibida:\n" + msg);
+        };
+      }
+    })();
+  </script>
+</body>
+</html>
