@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>iOS ↔︎ JS Bridge</title>
+  <title>iOS ↔︎ Android JS Bridge</title>
 </head>
 <body>
-  <button onclick="simulate()">Simular llamada iOS</button>
+  <button onclick="simulate()">Simular llamada</button>
 
   <script>
     (function () {
       function maskPan(p) { return String(p).replace(/\d(?=\d{4})/g, "•"); }
 
+      // ----- iOS -----
       window.iOSExecutePaymentVerification = function (pan, year, month, day, extra) {
         const resultObj = {
           status: "ok",
@@ -36,24 +37,64 @@
             } else if (typeof window.secure3DCallbackHandler === "function") {
               window.secure3DCallbackHandler(resultString);
             } else {
-              alert("Respuesta: " + resultString);
+              alert("Respuesta iOS: " + resultString);
             }
           } catch (e) {
-            alert("Error enviando respuesta: " + e);
+            alert("Error enviando respuesta iOS: " + e);
           }
         }, 2000);
 
         return true;
       };
 
-      // Botón de prueba manual
+      // ----- Android (igual comportamiento, puente típico addJavascriptInterface) -----
+      window.AndroidExecutePaymentVerification = function (pan, year, month, day, extra) {
+        const resultObj = {
+          status: "ok",
+          echo: {
+            panMasked: maskPan(pan),
+            last4: String(pan).slice(-4),
+            year: String(year),
+            month: String(month),
+            day: String(day),
+            extra: String(extra)
+          },
+          timestamp: new Date().toISOString()
+        };
+        const resultString = JSON.stringify(resultObj);
+
+        setTimeout(function () {
+          try {
+            // Si el host Android expuso un objeto "Android" con un método secure3DCallbackHandler(String)
+            if (window.Android && typeof window.Android.secure3DCallbackHandler === "function") {
+              window.Android.secure3DCallbackHandler(resultString);
+            } else if (typeof window.secure3DCallbackHandler === "function") {
+              // Fallback a función global si el host la expone
+              window.secure3DCallbackHandler(resultString);
+            } else if (window.webkit && window.webkit.messageHandlers
+                       && window.webkit.messageHandlers.secure3DCallbackHandler
+                       && typeof window.webkit.messageHandlers.secure3DCallbackHandler.postMessage === "function") {
+              // Fallback adicional por si se prueba en iOS
+              window.webkit.messageHandlers.secure3DCallbackHandler.postMessage(resultString);
+            } else {
+              alert("Respuesta Android: " + resultString);
+            }
+          } catch (e) {
+            alert("Error enviando respuesta Android: " + e);
+          }
+        }, 2000);
+
+        return true;
+      };
+
+      // Botón de prueba manual iOS
       window.simulate = function () {
         window.iOSExecutePaymentVerification(
           "4761530001111118", "2029", "12", "10", "cualquiercosa"
         );
       };
 
-      // Para navegadores sin handler nativo: define un handler que muestre un alert
+      // Handler de desarrollo para navegadores sin puente nativo
       if (typeof window.secure3DCallbackHandler !== "function") {
         window.secure3DCallbackHandler = function (msg) {
           alert("Respuesta recibida:\n" + msg);
